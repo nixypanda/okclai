@@ -1,7 +1,7 @@
 mod openai;
 
 use openai::OpenAIWrapper;
-use reqwest::blocking::Client;
+use reqwest::Client;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -14,7 +14,8 @@ struct CliArgs {
     command_description: Vec<String>,
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let opt = CliArgs::from_args();
 
     let client = Client::new();
@@ -22,7 +23,7 @@ fn main() -> anyhow::Result<()> {
     let open_ai_wrapper = OpenAIWrapper::new(&openai_api_key, &client);
 
     let command_descripton = opt.command_description.join(" ");
-    let response = open_ai_wrapper.get_response(&command_descripton)?;
+    let response = open_ai_wrapper.get_response(&command_descripton).await?;
     println!("{response}");
 
     Ok(())

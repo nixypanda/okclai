@@ -1,4 +1,4 @@
-use reqwest::blocking::{Client, RequestBuilder};
+use reqwest::{Client, RequestBuilder};
 use serde::{Deserialize, Serialize};
 
 const OPENAI_API_URL: &str = "https://api.openai.com/v1/chat/completions";
@@ -47,7 +47,7 @@ impl<'a> OpenAIWrapper<'a> {
         }
     }
 
-    fn make_request(&self, command_description: &str) -> anyhow::Result<RequestBuilder> {
+    async fn make_request(&self, command_description: &str) -> anyhow::Result<RequestBuilder> {
         let prompt = format!("{} {}?", self.prompt_prefix, command_description);
         let message = ChatFormatMessage {
             role: "user".to_string(),
@@ -68,9 +68,9 @@ impl<'a> OpenAIWrapper<'a> {
         Ok(request)
     }
 
-    pub fn get_response(&self, operation: &str) -> anyhow::Result<String> {
-        let request = self.make_request(operation)?;
-        let response = request.send()?;
+    pub async fn get_response(&self, operation: &str) -> anyhow::Result<String> {
+        let request = self.make_request(operation).await?;
+        let response = request.send().await?;
 
         if response.status() != reqwest::StatusCode::OK {
             return Err(anyhow::anyhow!(
@@ -79,7 +79,7 @@ impl<'a> OpenAIWrapper<'a> {
             ));
         }
 
-        let response_body: GPTResponse = response.json()?;
+        let response_body: GPTResponse = response.json().await?;
         let response_content = match response_body.choices.first() {
             Some(choice) => choice.message.content.to_string(),
             None => {
