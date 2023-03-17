@@ -22,6 +22,7 @@
           buildInputs = [
             openssl
             pkgconfig
+            darwin.apple_sdk.frameworks.Security
 
             rust-bin.stable.latest.default
           ];
