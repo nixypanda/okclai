@@ -23,8 +23,13 @@ async fn main() -> anyhow::Result<()> {
     let open_ai_wrapper = OpenAIWrapper::new(&openai_api_key, &client);
 
     let command_descripton = opt.command_description.join(" ");
-    let response = open_ai_wrapper.get_response(&command_descripton).await?;
-    println!("{response}");
+    let response_stream = open_ai_wrapper
+        .get_streaming_response(&command_descripton)
+        .await?;
+
+    for response in response_stream {
+        print!("{}", response);
+    }
 
     Ok(())
 }
