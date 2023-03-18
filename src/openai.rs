@@ -49,7 +49,6 @@ struct StreamingGPTResponse {
 #[derive(Debug, Deserialize, Clone)]
 pub struct StreamingChoice {
     delta: StreamingChatFormatMessage,
-    finish_reason: Option<String>,
 }
 
 pub struct OpenAIWrapper<'a> {
@@ -118,10 +117,10 @@ impl<'a> OpenAIWrapper<'a> {
         Ok(response_content)
     }
 
-    pub async fn get_streaming_response(
+    fn make_streaming_request(
         &self,
         command_description: &str,
-    ) -> anyhow::Result<impl Stream<Item = String>> {
+    ) -> Result<impl eventsource_client::Client, eventsource_client::Error> {
         let prompt = format!("{} {}?", self.prompt_prefix, command_description);
         let message = ChatFormatMessage {
             role: "user".to_string(),
@@ -132,17 +131,24 @@ impl<'a> OpenAIWrapper<'a> {
             messages: &[&message],
             stream: true,
         };
-
-        let request_body = serde_json::to_string(&gpt_request).unwrap();
-        let request = EventSourceClientBuilder::for_url(self.api_endpoint)
-            .unwrap()
-            .header("Authorization", &format!("Bearer {}", &self.api_key))
-            .unwrap()
-            .header("Content-Type", "application/json")
-            .unwrap()
+        let request_body = serde_json::to_string(&gpt_request)?;
+        let request = EventSourceClientBuilder::for_url(self.api_endpoint)?
+            .header("Authorization", &format!("Bearer {}", &self.api_key))?
+            .header("Content-Type", "application/json")?
             .method("POST".to_string())
             .body(request_body)
             .build();
+
+        Ok(request)
+    }
+
+    pub async fn get_streaming_response(
+        &self,
+        command_description: &str,
+    ) -> anyhow::Result<impl Stream<Item = anyhow::Result<String>>> {
+        let request = self
+            .make_streaming_request(command_description)
+            .map_err(|err| anyhow::anyhow!("Error making streaming request: {:?}", err))?;
 
         let stream = Box::pin(request.stream());
 
@@ -150,27 +156,40 @@ impl<'a> OpenAIWrapper<'a> {
             .filter_map(|event| async move {
                 match event {
                     Ok(SSE::Event(evt)) => {
-                        serde_json::from_str::<StreamingGPTResponse>(&evt.data).ok()
+                        let result_json = serde_json::from_str::<StreamingGPTResponse>(&evt.data);
+                        match result_json {
+                            Ok(json) => Some(Ok(json)),
+                            Err(e) => Some(Err(anyhow::anyhow!(
+                                "Error parsing streaming response: {:?}",
+                                e
+                            ))),
+                        }
                     }
-                    _ => None,
+                    Ok(SSE::Comment(comment)) => {
+                        // log this shit out somewhere
+                        None
+                    }
+                    Err(e) => Some(Err(anyhow::anyhow!("Error receiving stream: {:?}", e))),
                 }
             })
-            .map(|res| res.choices[0].clone())
-            .skip_while(|choice| {
+            .map(|result_response| {
+                result_response.map(|response| response.choices[0].delta.clone())
+            })
+            .skip_while(|result_delta| {
                 future::ready(!matches!(
-                    &choice.delta,
-                    StreamingChatFormatMessage::Role { role }
+                    &result_delta,
+                    Ok(StreamingChatFormatMessage::Role { role })
                 ))
             })
-            .take_while(|choice| {
+            .take_while(|result_delta| {
                 future::ready(!matches!(
-                    &choice.delta,
-                    StreamingChatFormatMessage::Empty {}
+                    &result_delta,
+                    Ok(StreamingChatFormatMessage::Empty {})
                 ))
             })
-            .filter_map(|choice| async move {
-                match choice.delta {
-                    StreamingChatFormatMessage::Content { content } => Some(content),
+            .filter_map(|result_delta| async move {
+                match result_delta {
+                    Ok(StreamingChatFormatMessage::Content { content }) => Some(Ok(content)),
                     _ => None,
                 }
             });
