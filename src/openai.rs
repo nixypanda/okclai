@@ -64,9 +64,9 @@ impl<'a> OpenAIWrapper<'a> {
         OpenAIWrapper {
             model: "gpt-3.5-turbo",
             api_endpoint: OPENAI_API_URL,
-            api_key: api_key,
+            api_key,
             prompt_prefix: PROMPT_PREFIX,
-            client: &client,
+            client,
         }
     }
 
@@ -77,7 +77,7 @@ impl<'a> OpenAIWrapper<'a> {
             content: prompt,
         };
         let request_body = GPTRequest {
-            model: &self.model,
+            model: self.model,
             messages: &[&message],
             stream: false,
         };
@@ -127,7 +127,7 @@ impl<'a> OpenAIWrapper<'a> {
             content: prompt,
         };
         let gpt_request = GPTRequest {
-            model: &self.model,
+            model: self.model,
             messages: &[&message],
             stream: true,
         };
@@ -178,7 +178,7 @@ impl<'a> OpenAIWrapper<'a> {
             .skip_while(|result_delta| {
                 future::ready(!matches!(
                     &result_delta,
-                    Ok(StreamingChatFormatMessage::Role { role })
+                    Ok(StreamingChatFormatMessage::Role { role: _ })
                 ))
             })
             .take_while(|result_delta| {
