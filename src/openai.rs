@@ -1,10 +1,9 @@
 use eventsource_client::{
     Client as EventSourceClient, ClientBuilder as EventSourceClientBuilder, SSE,
 };
-use futures_util::TryStreamExt;
+use futures::{future, Stream, StreamExt};
 use reqwest::{Client, RequestBuilder};
 use serde::{Deserialize, Serialize};
-use std::pin::Pin;
 
 const OPENAI_API_URL: &str = "https://api.openai.com/v1/chat/completions";
 const PROMPT_PREFIX: &str = "Assume you are a Linux/Unix expert. \
@@ -34,7 +33,7 @@ struct Choice {
     message: ChatFormatMessage,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 #[serde(untagged)]
 enum StreamingChatFormatMessage {
     Role { role: String },
@@ -48,7 +47,7 @@ struct StreamingGPTResponse {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-struct StreamingChoice {
+pub struct StreamingChoice {
     delta: StreamingChatFormatMessage,
     finish_reason: Option<String>,
 }
@@ -122,7 +121,7 @@ impl<'a> OpenAIWrapper<'a> {
     pub async fn get_streaming_response(
         &self,
         command_description: &str,
-    ) -> anyhow::Result<StreamingResponseIterator> {
+    ) -> anyhow::Result<impl Stream<Item = String>> {
         let prompt = format!("{} {}?", self.prompt_prefix, command_description);
         let message = ChatFormatMessage {
             role: "user".to_string(),
@@ -147,68 +146,35 @@ impl<'a> OpenAIWrapper<'a> {
 
         let stream = Box::pin(request.stream());
 
-        Ok(StreamingResponseIterator::new(stream))
-
-        // while let Ok(Some(event)) = stream.try_next().await {
-        //     match event {
-        //         SSE::Comment(comment) => println!("got a comment event: {:?}", comment),
-        //         SSE::Event(evt) => {
-        //             let data: StreamingGPTResponse = serde_json::from_str(&evt.data).unwrap();
-        //             let choice = data.choices[0].clone();
-        //             let delta = choice.delta.clone();
-        //             println!("got an event: {:?}", delta);
-        //             if let StreamingChatFormatMessage::Content { content } = delta {
-        //                 response = format!("{}{}", response, content);
-        //             } else if let StreamingChatFormatMessage::Empty {} = delta {
-        //                 break;
-        //             }
-        //         }
-        //     }
-        // }
-        //
-        // Ok("dea".to_string())
-    }
-}
-
-pub struct StreamingResponseIterator {
-    stream:
-        Pin<Box<dyn futures_util::stream::Stream<Item = Result<SSE, eventsource_client::Error>>>>,
-}
-
-impl StreamingResponseIterator {
-    pub fn new(
-        stream: Pin<
-            Box<dyn futures_util::stream::Stream<Item = Result<SSE, eventsource_client::Error>>>,
-        >,
-    ) -> StreamingResponseIterator {
-        StreamingResponseIterator { stream }
-    }
-}
-
-impl Iterator for StreamingResponseIterator {
-    type Item = String;
-
-    fn next(&mut self) -> Option<String> {
-        match futures::executor::block_on(self.stream.try_next()) {
-            Ok(Some(event)) => match event {
-                SSE::Comment(comment) => {
-                    // println!("got a comment event: {:?}", comment);
-                    panic!("TODO");
-                }
-                SSE::Event(evt) => {
-                    let data: StreamingGPTResponse = serde_json::from_str(&evt.data).unwrap();
-                    let choice = data.choices[0].clone();
-                    let delta = choice.delta.clone();
-                    // println!("got an event: {:?}", delta);
-                    match delta {
-                        StreamingChatFormatMessage::Content { content } => Some(content),
-                        StreamingChatFormatMessage::Empty {} => None,
-                        StreamingChatFormatMessage::Role { role } => Some("BEGIN:".to_string()),
+        let response = stream
+            .filter_map(|event| async move {
+                match event {
+                    Ok(SSE::Event(evt)) => {
+                        serde_json::from_str::<StreamingGPTResponse>(&evt.data).ok()
                     }
+                    _ => None,
                 }
-            },
-            Ok(None) => None,
-            Err(e) => None,
-        }
+            })
+            .map(|res| res.choices[0].clone())
+            .skip_while(|choice| {
+                future::ready(!matches!(
+                    &choice.delta,
+                    StreamingChatFormatMessage::Role { role }
+                ))
+            })
+            .take_while(|choice| {
+                future::ready(!matches!(
+                    &choice.delta,
+                    StreamingChatFormatMessage::Empty {}
+                ))
+            })
+            .filter_map(|choice| async move {
+                match choice.delta {
+                    StreamingChatFormatMessage::Content { content } => Some(content),
+                    _ => None,
+                }
+            });
+
+        Ok(response)
     }
 }
