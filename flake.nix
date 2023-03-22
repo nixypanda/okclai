@@ -18,7 +18,7 @@
       with pkgs;
       {
         devShell = mkShell {
-          name = "which_command";
+          name = "okclai";
           buildInputs = [
             openssl
             pkgconfig

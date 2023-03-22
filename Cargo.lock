@@ -609,6 +609,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "okclai"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "eventsource-client",
+ "futures",
+ "futures-util",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "structopt",
+ "tokio",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1366,22 +1382,6 @@ checksum = "b8e38c0608262c46d4a56202ebabdeb094cef7e560ca7a226c6bf055188aa4ea"
 dependencies = [
  "ring",
  "untrusted",
-]
-
-[[package]]
-name = "which_command"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "eventsource-client",
- "futures",
- "futures-util",
- "regex",
- "reqwest",
- "serde",
- "serde_json",
- "structopt",
- "tokio",
 ]
 
 [[package]]
