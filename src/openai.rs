@@ -8,13 +8,31 @@ use serde::{Deserialize, Serialize};
 const OPENAI_API_URL: &str = "https://api.openai.com/v1/chat/completions";
 const OPENAI_DEFAULT_MODEL: &str = "gpt-3.5-turbo";
 const PROMPT_SYSTEM: &str = "Assume you are a Linux/Unix-like systems expert. \
-    You are a helpful assistant that writes Linux commands to help the user accomplish their tasks";
-const PROMPT_PREFIX: &str = "Whatever response you give I would like to be able to execute a command out of it, so make sure you include a command or a bash script included in a code block to accomplish the given task. Make sure you are concise in the response that you give. ";
+    You are a helpful assistant that writes Linux commands to help the user accomplish their tasks \
+    The response must contain a command inside a code-block that can be executed first and foremost, \
+    followed by an explanation of the command detailing what each parameter or flag or chaining does.\
+    Be concise in your response.";
+const PROMPT_PREFIX: &str = "";
+const PROMPT_EXAMPLE_1_USER: &str = "pretty print commits in this repository with author name";
+const PROMPT_EXMAPLE_1_RESPONSE: &str = "You can pretty print git commits with author name by using the following command:\n \
+        \n \
+        ```bash\n \
+        git log --pretty=format:\"%h %s (%an)\" --graph\n \
+        ```\n \
+        \n \
+        Explanation:\n \
+        - `git` is the content tracker that you asked to use.\n \
+            - `log` lists commits that are reachable by following the parent links from the given commit(s), but exclude commits that are reachable from the one(s) given with a ^ in front of them. The output is given in reverse chronological order by default.\n \
+            - `--pretty=format:\"%h %s (%an)\"` is the format of the output.\n \
+                - `%h` is the abbreviated hash of the commit.\n \
+                - `%s` is the commit message.\n \
+                - `%an` is the author name.\n \
+            - `--graph` draws a text-based graphical representation of the commit history on the left hand side of the output. This may cause extra lines to be printed in between commits, in order for the graph history to be drawn properly.\n ";
 
 #[derive(Serialize)]
 struct GPTReq<'a> {
     model: &'a str,
-    messages: &'a [&'a ChatFmtMsg],
+    messages: &'a [ChatFmtMsg],
     stream: bool,
 }
 
@@ -38,11 +56,31 @@ enum ChatFmtMsg {
     Empty {},
 }
 
+impl ChatFmtMsg {
+    fn assistant(content: &str) -> ChatFmtMsg {
+        ChatFmtMsg::Both {
+            role: "assistant".to_string(),
+            content: content.to_string(),
+        }
+    }
+    fn user(content: &str) -> ChatFmtMsg {
+        ChatFmtMsg::Both {
+            role: "user".to_string(),
+            content: content.to_string(),
+        }
+    }
+    fn system(content: &str) -> ChatFmtMsg {
+        ChatFmtMsg::Both {
+            role: "system".to_string(),
+            content: content.to_string(),
+        }
+    }
+}
+
 pub struct OpenAIWrapper<'a> {
     model: &'a str,
     api_endpoint: &'a str,
     api_key: &'a str,
-    prompt_prefix: &'a str,
     client: &'a Client,
 }
 
@@ -52,20 +90,24 @@ impl<'a> OpenAIWrapper<'a> {
             model: OPENAI_DEFAULT_MODEL,
             api_endpoint: OPENAI_API_URL,
             api_key,
-            prompt_prefix: PROMPT_PREFIX,
             client,
         }
     }
 
+    fn request_message(&self, command_description: &str) -> Vec<ChatFmtMsg> {
+        vec![
+            ChatFmtMsg::system(PROMPT_SYSTEM),
+            ChatFmtMsg::user(PROMPT_EXAMPLE_1_USER),
+            ChatFmtMsg::assistant(PROMPT_EXMAPLE_1_RESPONSE),
+            ChatFmtMsg::user(&format!("{} {}", PROMPT_PREFIX, command_description)),
+        ]
+    }
+
     async fn make_request(&self, command_description: &str) -> anyhow::Result<RequestBuilder> {
-        let prompt = format!("{} {}?", self.prompt_prefix, command_description);
-        let message = ChatFmtMsg::Both {
-            role: "user".to_string(),
-            content: prompt,
-        };
+        let messages = self.request_message(command_description);
         let request_body = GPTReq {
             model: self.model,
-            messages: &[&message],
+            messages: &messages[..],
             stream: false,
         };
 
@@ -112,14 +154,10 @@ impl<'a> OpenAIWrapper<'a> {
         &self,
         command_description: &str,
     ) -> Result<impl eventsource_client::Client, eventsource_client::Error> {
-        let prompt = format!("{} {}?", self.prompt_prefix, command_description);
-        let message = ChatFmtMsg::Both {
-            role: "user".to_string(),
-            content: prompt,
-        };
+        let messages = self.request_message(command_description);
         let gpt_request = GPTReq {
             model: self.model,
-            messages: &[&message],
+            messages: &messages[..],
             stream: true,
         };
         let request_body = serde_json::to_string(&gpt_request)?;
