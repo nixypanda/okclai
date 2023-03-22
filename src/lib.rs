@@ -9,17 +9,21 @@ use std::process::Command;
 
 pub struct Settings {
     stream: bool,
+    explain: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { stream: true }
+        Self {
+            stream: true,
+            explain: true,
+        }
     }
 }
 
 impl Settings {
-    pub fn new(stream: bool) -> Self {
-        Self { stream }
+    pub fn new(stream: bool, explain: bool) -> Self {
+        Self { stream, explain }
     }
 }
 
@@ -44,14 +48,21 @@ impl<'a> OkClai<'a> {
             Ok(response)
         } else {
             let response = self.openai.get_response(&command_descripton).await?;
-            println!("{}", response);
+            if self.settings.explain {
+                println!("{}", response);
+            }
             Ok(response)
         };
 
         let command = self.extract_code_block(&response?)?;
-        println!("\nCommand to execute: {:?}", command);
+        if self.settings.explain {
+            println!("\nCommand to execute: {:?}", command);
+        }
         let result = self.execute_command(&command)?;
-        print!("\nOutput:\n{}", result);
+        if self.settings.explain {
+            println!("\nOutput:");
+        }
+        print!("{}", result);
 
         Ok(())
     }
@@ -64,13 +75,17 @@ impl<'a> OkClai<'a> {
         while let Some(result_token) = stream.next().await {
             match result_token {
                 Ok(token) => {
-                    print!("{}", token);
+                    if self.settings.explain {
+                        print!("{}", token);
+                    }
                     response = format!("{}{}", response, token);
                 }
                 Err(e) => return Err(e),
             }
         }
-        println!();
+        if self.settings.explain {
+            println!();
+        }
         Ok(response)
     }
 
