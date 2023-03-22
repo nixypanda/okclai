@@ -6,9 +6,10 @@ use reqwest::{Client, RequestBuilder};
 use serde::{Deserialize, Serialize};
 
 const OPENAI_API_URL: &str = "https://api.openai.com/v1/chat/completions";
-const PROMPT_PREFIX: &str = "Assume you are a Linux/Unix expert. \
-    Be concise in your response. \
-    Which command ";
+const OPENAI_DEFAULT_MODEL: &str = "gpt-3.5-turbo";
+const PROMPT_SYSTEM: &str = "Assume you are a Linux/Unix-like systems expert. \
+    You are a helpful assistant that writes Linux commands to help the user accomplish their tasks";
+const PROMPT_PREFIX: &str = "Whatever response you give I would like to be able to execute a command out of it, so make sure you include a command or a bash script included in a code block to accomplish the given task. Make sure you are concise in the response that you give. ";
 
 #[derive(Serialize)]
 struct GPTReq<'a> {
@@ -48,7 +49,7 @@ pub struct OpenAIWrapper<'a> {
 impl<'a> OpenAIWrapper<'a> {
     pub fn new(api_key: &'a str, client: &'a Client) -> Self {
         OpenAIWrapper {
-            model: "gpt-3.5-turbo",
+            model: OPENAI_DEFAULT_MODEL,
             api_endpoint: OPENAI_API_URL,
             api_key,
             prompt_prefix: PROMPT_PREFIX,

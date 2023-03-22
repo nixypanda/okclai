@@ -2,7 +2,9 @@ mod openai;
 
 use futures::StreamExt;
 use openai::OpenAIWrapper;
+use regex::Regex;
 use reqwest::Client;
+use std::process::Command;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -38,9 +40,14 @@ async fn main() -> anyhow::Result<()> {
                 .await?,
         );
 
+        let mut response = String::new();
+
         while let Some(result_token) = response_stream.next().await {
             match result_token {
-                Ok(response) => print!("{}", response),
+                Ok(token) => {
+                    print!("{}", token);
+                    response = format!("{}{}", response, token);
+                }
                 Err(e) => {
                     eprintln!("{}", e);
                     break;
@@ -48,9 +55,40 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         println!();
+        let command = extract_code_block(&response);
+        if let Some(command) = command {
+            println!("Command to execute: {:?}", command);
+            let result = execute_command(&command)?;
+            print!("Output:\n{}", result);
+        }
     }
 
     Ok(())
+}
+
+fn extract_code_block(input: &str) -> Option<String> {
+    let re = Regex::new(r"```(?:\w+)?\n?(?P<code>[\s\S]*?)\n?```").unwrap();
+    if let Some(captures) = re.captures(input) {
+        return Some(captures.name("code").unwrap().as_str().to_string());
+    }
+    None
+}
+
+fn execute_command(command: &str) -> anyhow::Result<String> {
+    let output = Command::new("sh").arg("-c").arg(&command).output()?;
+    // .with_context(|| format!("Failed to execute command: {}", command))?;
+
+    if !output.status.success() {
+        let error_message = String::from_utf8_lossy(&output.stderr).to_string();
+        Err(anyhow::anyhow!(
+            "Command failed: {}\nError message: {}",
+            command,
+            error_message
+        ))
+    } else {
+        let success_message = String::from_utf8_lossy(&output.stdout).to_string();
+        Ok(success_message)
+    }
 }
 
 fn get_api_key() -> anyhow::Result<String> {
