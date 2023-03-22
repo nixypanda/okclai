@@ -14,6 +14,9 @@ struct CliArgs {
     #[structopt(long, help = "Weather or not to explain what is going on")]
     no_explanation: bool,
 
+    #[structopt(long, help = "Weather or not to ask before executing the command")]
+    no_ask: bool,
+
     #[structopt(help = "Description of the command you want to find")]
     command_description: Vec<String>,
 }
@@ -25,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
     let client = Client::new();
     let openai_api_key = get_api_key()?;
     let open_ai_wrapper = OpenAIWrapper::new(&openai_api_key, &client);
-    let settings = Settings::new(!opt.no_stream, !opt.no_explanation);
+    let settings = Settings::new(!opt.no_stream, !opt.no_explanation, !opt.no_ask);
     let okclai = OkClai::new(open_ai_wrapper, settings);
 
     let command_descripton = opt.command_description.join(" ");

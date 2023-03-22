@@ -4,12 +4,14 @@ use anyhow::anyhow;
 use futures::{Stream, StreamExt};
 pub use openai::OpenAIWrapper;
 use regex::Regex;
+use std::io;
 use std::pin::Pin;
 use std::process::Command;
 
 pub struct Settings {
     stream: bool,
     explain: bool,
+    ask_before_execution: bool,
 }
 
 impl Default for Settings {
@@ -17,13 +19,18 @@ impl Default for Settings {
         Self {
             stream: true,
             explain: true,
+            ask_before_execution: true,
         }
     }
 }
 
 impl Settings {
-    pub fn new(stream: bool, explain: bool) -> Self {
-        Self { stream, explain }
+    pub fn new(stream: bool, explain: bool, ask_before_execution: bool) -> Self {
+        Self {
+            stream,
+            explain,
+            ask_before_execution,
+        }
     }
 }
 
@@ -55,16 +62,35 @@ impl<'a> OkClai<'a> {
         };
 
         let command = self.extract_code_block(&response?)?;
-        if self.settings.explain {
+        if self.settings.explain || self.settings.ask_before_execution {
             println!("\nCommand to execute: {:?}", command);
         }
-        let result = self.execute_command(&command)?;
-        if self.settings.explain {
-            println!("\nOutput:");
+
+        if self.should_execute()? {
+            let result = self.execute_command(&command)?;
+            if self.settings.explain {
+                println!("\nOutput:");
+            }
+            print!("{}", result);
         }
-        print!("{}", result);
 
         Ok(())
+    }
+
+    fn should_execute(&self) -> anyhow::Result<bool> {
+        let mut execute_command = true;
+        if self.settings.ask_before_execution {
+            println!("\nDo you want to execute the command (y to execute)?");
+            let mut name = String::new();
+            io::stdin().read_line(&mut name)?;
+            name = name.trim().to_string();
+
+            if name != "y" {
+                execute_command = false;
+            }
+        }
+
+        Ok(execute_command)
     }
 
     async fn print_and_extract_response(
