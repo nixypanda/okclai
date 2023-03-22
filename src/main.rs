@@ -1,9 +1,11 @@
 mod openai;
 
-use futures::StreamExt;
+use anyhow::anyhow;
+use futures::{Stream, StreamExt};
 use openai::OpenAIWrapper;
 use regex::Regex;
 use reqwest::Client;
+use std::pin::Pin;
 use std::process::Command;
 use structopt::StructOpt;
 
@@ -30,53 +32,61 @@ async fn main() -> anyhow::Result<()> {
 
     let command_descripton = opt.command_description.join(" ");
 
-    if opt.no_stream {
+    let response: anyhow::Result<String> = if opt.no_stream {
         let response = open_ai_wrapper.get_response(&command_descripton).await?;
         println!("{}", response);
+        Ok(response)
     } else {
-        let mut response_stream = Box::pin(
+        let response_stream = Box::pin(
             open_ai_wrapper
                 .get_streaming_response(&command_descripton)
                 .await?,
         );
+        let response = print_and_extract_response(response_stream).await?;
+        Ok(response)
+    };
 
-        let mut response = String::new();
-
-        while let Some(result_token) = response_stream.next().await {
-            match result_token {
-                Ok(token) => {
-                    print!("{}", token);
-                    response = format!("{}{}", response, token);
-                }
-                Err(e) => {
-                    eprintln!("{}", e);
-                    break;
-                }
-            }
-        }
-        println!();
-        let command = extract_code_block(&response);
-        if let Some(command) = command {
-            println!("Command to execute: {:?}", command);
-            let result = execute_command(&command)?;
-            print!("Output:\n{}", result);
-        }
-    }
+    let command = extract_code_block(&response?)?;
+    println!("\nCommand to execute: {:?}", command);
+    let result = execute_command(&command)?;
+    print!("\nOutput:\n{}", result);
 
     Ok(())
 }
 
-fn extract_code_block(input: &str) -> Option<String> {
-    let re = Regex::new(r"```(?:\w+)?\n?(?P<code>[\s\S]*?)\n?```").unwrap();
-    if let Some(captures) = re.captures(input) {
-        return Some(captures.name("code").unwrap().as_str().to_string());
+async fn print_and_extract_response(
+    mut stream: Pin<Box<impl Stream<Item = Result<String, anyhow::Error>>>>,
+) -> anyhow::Result<String> {
+    let mut response = String::new();
+    while let Some(result_token) = stream.next().await {
+        match result_token {
+            Ok(token) => {
+                print!("{}", token);
+                response = format!("{}{}", response, token);
+            }
+            Err(e) => return Err(e),
+        }
     }
-    None
+    println!();
+    Ok(response)
+}
+
+fn extract_code_block(input: &str) -> anyhow::Result<String> {
+    let re = Regex::new(r"```(?:\w+)?\n?(?P<code>[\s\S]*?)\n?```")
+        .map_err(|e| anyhow!("Error creating regex: {}", e))?;
+
+    if let Some(captures) = re.captures(input) {
+        let code = captures
+            .name("code")
+            .ok_or_else(|| anyhow!("No code block found"))?;
+        Ok(code.as_str().to_string())
+    } else {
+        Err(anyhow!("No code block found"))
+    }
 }
 
 fn execute_command(command: &str) -> anyhow::Result<String> {
     let output = Command::new("sh").arg("-c").arg(&command).output()?;
-    // .with_context(|| format!("Failed to execute command: {}", command))?;
 
     if !output.status.success() {
         let error_message = String::from_utf8_lossy(&output.stderr).to_string();
