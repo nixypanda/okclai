@@ -5,7 +5,7 @@ use structopt::StructOpt;
 #[derive(Debug, StructOpt)]
 #[structopt(
     name = "file",
-    about = "A command line tool to help you find the right command for the job"
+    about = "A command line tool to help you find and execute the right command form a description"
 )]
 struct CliArgs {
     #[structopt(long, help = "Weather or not to stream the rosponse from OpenAI")]

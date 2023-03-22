@@ -1,8 +1,10 @@
-# Which Command
+# Ok ClAI
 
-This command-line tool built in Rust enables you to find the right command by
-entering a description of the desired functionality. It accomplishes this by
-leveraging OpenAI's API.
+This command-line tool built in Rust enables you to find and execute the right
+command by entering a description of the desired functionality. It accomplishes
+this by leveraging OpenAI's API.
+
+Note: The name is a derived from "Ok Google" + "CLI" + "AI"
 
 ## Prerequisites
 
@@ -17,9 +19,9 @@ it.
 
 1. Clone the repository and navigate to the project directory
 
-   `$ git clone https://github.com/sherub/which_command.git`
+   `$ git clone https://github.com/sherub/okclai.git`
 
-   `$ cd which_command>`
+   `$ cd okclai>`
 
 2. Set the `OPENAI_API_KEY` environment variable to your OpenAI API key
 
@@ -36,15 +38,16 @@ returns the corresponding command. You can choose to stream the response or get
 a single response.
 
 ```shell
-A command line tool to help you find the right command for the job
+A command line tool to help you find and execute the right command form a description.
 
 USAGE:
-    which_command [FLAGS] [command-description]...
+    okclai [FLAGS] [command-description]...
 
 FLAGS:
-    -h, --help         Prints help information
-        --no-stream    Weather or not to stream the rosponse from OpenAI
-    -V, --version      Prints version information
+    -h, --help              Prints help information
+        --no-explanation    Weather or not to explain what is going on
+        --no-stream         Weather or not to stream the rosponse from OpenAI
+    -V, --version           Prints version information
 
 ARGS:
     <command-description>...    Description of the command you want to find
@@ -52,11 +55,11 @@ ARGS:
 
 Here is an example command that streams the response:
 
-`$ ./target/release/which_command Move a file from one directory to another`
+`$ ./target/release/okclai Move a file from one directory to another`
 
 Here is an example command that returns a single response:
 
-`$ ./target/release/which_command --no-stream Create a new folder in Windows`
+`$ ./target/release/okclai --no-stream Create a new folder in Windows`
 
 ## License
 
