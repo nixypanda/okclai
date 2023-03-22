@@ -4,9 +4,9 @@ use anyhow::anyhow;
 use futures::{Stream, StreamExt};
 pub use openai::OpenAIWrapper;
 use regex::Regex;
-use std::io;
 use std::pin::Pin;
 use std::process::Command;
+use termimad::{ask, Answer, MadSkin, Question};
 
 pub struct Settings {
     stream: bool,
@@ -37,11 +37,16 @@ impl Settings {
 pub struct OkClai<'a> {
     openai: OpenAIWrapper<'a>,
     settings: Settings,
+    skin: MadSkin,
 }
 
 impl<'a> OkClai<'a> {
     pub fn new(openai: OpenAIWrapper<'a>, settings: Settings) -> Self {
-        Self { openai, settings }
+        Self {
+            openai,
+            settings,
+            skin: MadSkin::default_dark(),
+        }
     }
 
     pub async fn execute(&self, command_descripton: &str) -> anyhow::Result<()> {
@@ -56,20 +61,26 @@ impl<'a> OkClai<'a> {
         } else {
             let response = self.openai.get_response(&command_descripton).await?;
             if self.settings.explain {
-                println!("{}", response);
+                println!("{}", self.skin.term_text(&response));
             }
             Ok(response)
         };
 
         let command = self.extract_code_block(&response?)?;
         if self.settings.explain || self.settings.ask_before_execution {
-            println!("\nCommand to execute: {:?}", command);
+            println!();
+            println!(
+                "{}",
+                self.skin
+                    .term_text(&format!("## Command to execute:\n`{}`", command))
+            );
         }
 
         if self.should_execute()? {
             let result = self.execute_command(&command)?;
             if self.settings.explain {
-                println!("\nOutput:");
+                println!();
+                println!("{}", self.skin.term_text("## Output"));
             }
             print!("{}", result);
         }
@@ -80,12 +91,16 @@ impl<'a> OkClai<'a> {
     fn should_execute(&self) -> anyhow::Result<bool> {
         let mut execute_command = true;
         if self.settings.ask_before_execution {
-            println!("\nDo you want to execute the command (y to execute)?");
-            let mut name = String::new();
-            io::stdin().read_line(&mut name)?;
-            name = name.trim().to_string();
+            let choice = ask!(&self.skin, "**Do you want to execute the command**", ('n') {
+                ('y', "*Yes*, please") => {
+                    Some("yes")
+                }
+                ('n', "*No*, thank you.") => {
+                    None
+                }
+            });
 
-            if name != "y" {
+            if let None = choice {
                 execute_command = false;
             }
         }

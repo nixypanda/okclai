@@ -15,19 +15,20 @@ const PROMPT_SYSTEM: &str = "Assume you are a Linux/Unix-like systems expert. \
 const PROMPT_PREFIX: &str = "";
 const PROMPT_EXAMPLE_1_USER: &str = "pretty print commits in this repository with author name";
 const PROMPT_EXMAPLE_1_RESPONSE: &str = "You can pretty print git commits with author name by using the following command:\n \
+        ## Command\n \
         \n \
         ```bash\n \
         git log --pretty=format:\"%h %s (%an)\" --graph\n \
         ```\n \
         \n \
-        Explanation:\n \
-        - `git` is the content tracker that you asked to use.\n \
-            - `log` lists commits that are reachable by following the parent links from the given commit(s), but exclude commits that are reachable from the one(s) given with a ^ in front of them. The output is given in reverse chronological order by default.\n \
-            - `--pretty=format:\"%h %s (%an)\"` is the format of the output.\n \
-                - `%h` is the abbreviated hash of the commit.\n \
-                - `%s` is the commit message.\n \
-                - `%an` is the author name.\n \
-            - `--graph` draws a text-based graphical representation of the commit history on the left hand side of the output. This may cause extra lines to be printed in between commits, in order for the graph history to be drawn properly.\n ";
+        ## Explanation\n \
+        * `git` is the content tracker that you asked to use.\n \
+            * `log` lists commits that are reachable by following the parent links from the given commit(s), but exclude commits that are reachable from the one(s) given with a ^ in front of them. The output is given in reverse chronological order by default.\n \
+            * `--pretty=format:\"%h %s (%an)\"` is the format of the output.\n \
+                * `%h` is the abbreviated hash of the commit.\n \
+                * `%s` is the commit message.\n \
+                * `%an` is the author name.\n \
+            * `--graph` draws a text-based graphical representation of the commit history on the left hand side of the output. This may cause extra lines to be printed in between commits, in order for the graph history to be drawn properly.\n ";
 
 #[derive(Serialize)]
 struct GPTReq<'a> {
@@ -50,9 +51,9 @@ struct Choice {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(untagged)]
 enum ChatFmtMsg {
+    Both { role: String, content: String },
     Role { role: String },
     Content { content: String },
-    Both { role: String, content: String },
     Empty {},
 }
 
