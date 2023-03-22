@@ -38,13 +38,14 @@ returns the corresponding command. You can choose to stream the response or get
 a single response.
 
 ```shell
-A command line tool to help you find and execute the right command form a description.
+A command line tool to help you find and execute the right command form a description
 
 USAGE:
     okclai [FLAGS] [command-description]...
 
 FLAGS:
     -h, --help              Prints help information
+        --no-ask            Weather or not to ask before executing the command
         --no-explanation    Weather or not to explain what is going on
         --no-stream         Weather or not to stream the rosponse from OpenAI
     -V, --version           Prints version information
@@ -53,13 +54,21 @@ ARGS:
     <command-description>...    Description of the command you want to find
 ```
 
-Here is an example command that streams the response:
+Here is an example command that streams the response, and does not ask before
+executing the command:
 
-`$ ./target/release/okclai Move a file from one directory to another`
+`$ ./target/release/okclai --no-ask show me all the git remote url for this repository`
 
-Here is an example command that returns a single response:
+Here is an example command that returns a single response, and does not show the
+response, and does not ask before executing the command:
 
-`$ ./target/release/okclai --no-stream Create a new folder in Windows`
+```shell
+./target/release/okclai \
+    --no-stream \
+    --no-ask \
+    --no-explanation \
+    create a new folder named my_folder`
+```
 
 ## License
 
