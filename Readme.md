@@ -6,6 +6,10 @@ this by leveraging OpenAI's API.
 
 Note: The name is a derived from "Ok Google" + "CLI" + "AI"
 
+## In Action
+
+![image](./docs/in-action.png)
+
 ## Prerequisites
 
 - Rust programming language
